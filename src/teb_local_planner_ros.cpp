@@ -297,6 +297,7 @@ uint32_t TebLocalPlannerROS::computeVelocityCommands(const geometry_msgs::PoseSt
     PoseSE2 new_goal(global_plan_.back().pose);
     new_goal.theta() = g2o::normalize_theta(new_goal.theta() - g2o::const_pi());
     new_goal.toPoseMsg(global_plan_.back().pose);
+    delta_orient = g2o::normalize_theta(new_goal.theta() - robot_pose_.theta() );
   }
 
   if (fabs(std::sqrt(dx * dx + dy * dy)) <
@@ -304,24 +305,18 @@ uint32_t TebLocalPlannerROS::computeVelocityCommands(const geometry_msgs::PoseSt
     ROS_INFO("Near (%.2f, %.2f)m goal", dx, dy);
     if (fabs(delta_orient) < cfg_.goal_tolerance.yaw_goal_tolerance) {
       ROS_INFO("Orientated at goal, %.2frad", delta_orient);
-      if (!cfg_.goal_tolerance.complete_global_plan ||
-          via_points_.size() == 0) {
-        if (base_local_planner::stopped(
-                base_odom, cfg_.goal_tolerance.theta_stopped_vel,
-                cfg_.goal_tolerance.trans_stopped_vel) ||
-            cfg_.goal_tolerance.free_goal_vel) {
-          ROS_INFO("Ended (%.2f, %.2f)m /_ %.2f away from goal", dx, dy,
-                   delta_orient);
-          goal_reached_ = true;
-          return mbf_msgs::ExePathResult::SUCCESS;
-        } else {
-          ROS_INFO("Not stopped: %.3fm/s %.3frad/s",
-                   base_odom.twist.twist.linear.x,
-                   base_odom.twist.twist.angular.z);
-        }
-
+      if (base_local_planner::stopped(base_odom,
+                                      cfg_.goal_tolerance.theta_stopped_vel,
+                                      cfg_.goal_tolerance.trans_stopped_vel) ||
+          cfg_.goal_tolerance.free_goal_vel) {
+        ROS_INFO("Ended (%.2f, %.2f)m /_ %.2f away from goal", dx, dy,
+                 delta_orient);
+        goal_reached_ = true;
+        return mbf_msgs::ExePathResult::SUCCESS;
       } else {
-        ROS_INFO("Still have %zu via points", via_points_.size());
+        ROS_INFO("Not stopped: %.3fm/s %.3frad/s",
+                 base_odom.twist.twist.linear.x,
+                 base_odom.twist.twist.angular.z);
       }
     } else {
       ROS_INFO("%.2f > %.2frad", fabs(delta_orient),
